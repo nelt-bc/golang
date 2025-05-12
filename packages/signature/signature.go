@@ -1,10 +1,12 @@
-package utils
+package signature
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
+	"tron/utils"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -95,4 +97,38 @@ func SignTypedData(domain Domain, messageHashType string, abiArguments []AbiArgu
 	s = signature[32:64]
 	v = signature[64] + 27
 	return r, s, v
+}
+
+func VerifySignature(signature []byte, domain Domain, messageHashType string, abiArguments []AbiArgument, expectedSigner string) (bool, error) {
+	if len(signature) != 65 {
+		return false, errors.New("invalid signature length")
+	}
+
+	domainHash := keccak256StructHash(EIP721_DOMAIN_TYPE, []AbiArgument{
+		{Type: "string", Value: domain.Name},
+		{Type: "string", Value: domain.Version},
+		{Type: "uint256", Value: domain.ChainId},
+		{Type: "address", Value: domain.VerifyingContract},
+	})
+	messageHash := keccak256StructHash(messageHashType, abiArguments)
+
+	digest := crypto.Keccak256(
+		[]byte("\x19\x01"),
+		domainHash,
+		messageHash,
+	)
+
+	v := signature[64]
+	if v < 27 {
+		v += 27
+	}
+	sig := append(signature[:64], v-27)
+	pubKey, err := crypto.SigToPub(digest, sig)
+	if err != nil {
+		return false, fmt.Errorf("invalid signature: %w", err)
+	}
+
+	recovered := crypto.PubkeyToAddress(*pubKey)
+	tronAddress, _ := utils.EthToTronAddress(recovered.String())
+	return tronAddress == expectedSigner, nil
 }

@@ -1,16 +1,19 @@
 package utils
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
 func TransformAddress(tronAddress string) (common.Address, error) {
-	alphabet := "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 	// Validate input
 	if !strings.HasPrefix(tronAddress, "T") {
 		return common.Address{}, fmt.Errorf("invalid Tron address format: must start with 'T'")
@@ -42,4 +45,23 @@ func TransformAddress(tronAddress string) (common.Address, error) {
 
 	// Convert to hex with 0x prefix
 	return common.HexToAddress(ethAddr), nil
+}
+
+func EthToTronAddress(ethAddress string) (string, error) {
+	ethAddr := common.HexToAddress(ethAddress)
+	// 1. Add 0x41 prefix (TRON Mainnet)
+	prefix := []byte{0x41}
+	addressBytes := ethAddr.Bytes()
+	payload := append(prefix, addressBytes...) // 21 bytes
+
+	// 2. Calculate SHA256 checksum
+	hash1 := sha256.Sum256(payload)
+	hash2 := sha256.Sum256(hash1[:])
+	checksum := hash2[:4]
+
+	// 3. Append checksum
+	fullPayload := append(payload, checksum...) // 25 bytes
+
+	// 4. Base58 encode
+	return base58.Encode(fullPayload), nil
 }
