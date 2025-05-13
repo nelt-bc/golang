@@ -65,7 +65,7 @@ func keccak256StructHash(typeDef string, values []AbiArgument) []byte {
 	return crypto.Keccak256(encoded)
 }
 
-func SignTypedData(domain Domain, messageHashType string, abiArguments []AbiArgument, privateKey string) (r, s []byte, v byte) {
+func SignTypedData(domain Domain, messageHashType string, abiArguments []AbiArgument, privateKey string) ([]byte, error) {
 	domainHash := keccak256StructHash(EIP721_DOMAIN_TYPE, []AbiArgument{
 		{Type: "string", Value: domain.Name},
 		{Type: "string", Value: domain.Version},
@@ -85,18 +85,9 @@ func SignTypedData(domain Domain, messageHashType string, abiArguments []AbiArgu
 
 	signature, err := crypto.Sign(digest, pk.ToECDSA())
 	if err != nil {
-		log.Fatal("Invalid private key")
+		return []byte{}, err
 	}
-
-	fmt.Printf("Signature: 0x%s\n", hex.EncodeToString(signature))
-	if len(signature) != 65 {
-		log.Fatal("invalid signature length")
-	}
-
-	r = signature[0:32]
-	s = signature[32:64]
-	v = signature[64] + 27
-	return r, s, v
+	return signature, nil
 }
 
 func VerifySignature(signature []byte, domain Domain, messageHashType string, abiArguments []AbiArgument, expectedSigner string) (bool, error) {
@@ -131,4 +122,15 @@ func VerifySignature(signature []byte, domain Domain, messageHashType string, ab
 	recovered := crypto.PubkeyToAddress(*pubKey)
 	tronAddress, _ := utils.EthToTronAddress(recovered.String())
 	return tronAddress == expectedSigner, nil
+}
+
+func SplitSignature(signature []byte) (r, s []byte, v byte, err error) {
+	if len(signature) != 65 {
+		return []byte{}, []byte{}, 0, err
+	}
+
+	r = signature[0:32]
+	s = signature[32:64]
+	v = signature[64] + 27
+	return r, s, v, nil
 }
